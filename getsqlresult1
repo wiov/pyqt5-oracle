@@ -1,0 +1,104 @@
+# -*- coding: utf-8 -*-
+import cx_Oracle
+from PyQt5.QtCore import QTimer, QDateTime, QDate
+import sys
+from openpyxl import Workbook
+from PyQt5 import QtWidgets, QtGui
+from PyQt5.QtWidgets import QFileDialog, QHeaderView, QSplashScreen
+from formtableview1 import Ui_Form
+#本小程序是pyqt5 连oracle的试例
+class MyPyQT_Form(QtWidgets.QWidget,Ui_Form):
+    def __init__(self):
+        super(MyPyQT_Form,self).__init__()
+        self.setupUi(self)
+        self.setWindowTitle("全人数")  #小程序标题栏
+        self.count = 10
+        self.pushButton.clicked.connect(self.Action)
+        self.time = QTimer(self)   #生成计时器
+        self.time.setInterval(1000)
+        self.time.timeout.connect(self.Refresh)
+        self.dateEdit.setDate(QDate.currentDate())    #设置dateedit的时间为当天
+
+
+    def conn_orc(self):
+
+        str_datetime = self.dateEdit.dateTime().toString("yyyyMMdd")    #获取dateedit的值
+
+        try:
+
+            conn = cx_Oracle.connect('用户名/密码@IP/ORC1', encoding = 'UTF-8', nencoding = 'UTF-8')   #数据库地址，用户名，密码   中文乱码
+            cursor = conn.cursor()
+            cursor.execute('''select a.zyh, a.xm,b.bqmc  from ndns.zl a left join ndns.bq b on a.rybq=b.bqdm where  to_char(a.ryrq,'yyyymmdd')=:nu and zyh not like '%*%' and a.rybq not in('2003','CS01','7016') ''', nu=str_datetime)   #sql
+            result2 = cursor.fetchall()
+            cursor.close()
+
+        except cx_Oracle.DatabaseError as e:
+            print(e)
+        finally:
+            conn.close()
+        return result2
+
+
+
+    def push_button(self):
+
+        result = self.conn_orc()
+        self.model = QtGui.QStandardItemModel(len(result), len(result[0]))   #设置多少列多少行
+        self.model.setHorizontalHeaderLabels(['XXX', 'XX', 'XX'])   #设置标头
+
+        j = 0
+        for row in result:
+
+            i = 0
+            for aaa in row:
+                item = QtGui.QStandardItem("%s" %aaa)
+                self.model.setItem(j, i, item)
+                i = i+1
+            j = j+1
+        self.tableView.setModel(self.model)
+        self.tableView.horizontalHeader().setStretchLastSection(True)      #设置表格充满
+        self.tableView.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+
+
+    def get_excel(self):
+        result = self.conn_orc()
+        filename2, ok2 = QFileDialog.getSaveFileName(self, "保存", "./", "Excel Files (*.xlsx)")  #获取你的保存文件名
+        if filename2 != "":
+            wb = Workbook()
+            ws = wb.active
+            ws.append(['XXX', 'XX', 'XX'])     #第一行设成标头
+            for row in result:
+                ws.append(row)
+            wb.save(filename=filename2)
+
+    def Action(self):                #用来设置按键变灰不可用
+        if self.pushButton.isEnabled():
+            self.time.start()
+            self.pushButton.setEnabled(False)
+
+    def Refresh(self):         #用来设置按键变灰不可用
+        if self.count > 0:
+            self.pushButton.setText(str(self.count) + '秒后才能再点')
+            self.count -= 1
+        else:
+            self.time.stop()
+            self.pushButton.setEnabled(True)
+            self.pushButton.setText('点击获取结果')
+            self.count = 10
+
+if __name__ == '__main__':
+
+    app = QtWidgets.QApplication(sys.argv)
+    splash = QSplashScreen(QtGui.QPixmap("splash.jpg"))     #程序启动前显示一个预提示
+    splash.show()
+    font = QtGui.QFont()
+    font.setPointSize(16)
+    font.setBold(True)
+    font.setWeight(75)
+    #splash.setFont(font)
+    #splash.showMessage("正在加载。。。", Qt.AlignCenter, Qt.red, )
+    #splash.showMessage("渲染图片。。。", Qt.AlignCenter, Qt.red)
+    my_pyqt_form = MyPyQT_Form()
+    my_pyqt_form.show()
+    splash.finish(my_pyqt_form)
+    sys.exit(app.exec_())
